@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "Se usar este software ou os resultados, cite conforme abaixo."
+type: software
+title: "chicago-crime-analytics: dashboard e avaliação de modelos preditivos para crimes em Chicago"
+version: 1.0.0
+date-released: 2026-10-03
+license: MIT
+repository-code: "https://github.com/<usuario>/chicago-crime-analytics"
+authors:
+  - family-names: Massuda
+    given-names: Matheus Henrique
+    affiliation: "Instituto de Biociências de Botucatu, UNESP"
+  - family-names: Rybarczyk Filho
+    given-names: José Luiz
+    affiliation: "Instituto de Biociências de Botucatu, UNESP"
+    email: jose.luiz@unesp.br
+keywords:
+  - crime prediction
+  - time series
+  - Prophet
+  - random forest
+  - DBSCAN
+  - Chicago
+  - Streamlit
+references:
+  - type: thesis
+    title: "Inteligência Artificial na Segurança Urbana: Uma Análise Preditiva dos Crimes em Chicago"
+    authors:
+      - family-names: Massuda
+        given-names: Matheus Henrique
+    thesis-type: "Trabalho de Conclusão de Curso (Bacharelado em Física Médica)"
+    institution:
+      name: "Universidade Estadual Paulista (UNESP), Instituto de Biociências, Botucatu"
+    year: 2025

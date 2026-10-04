@@ -1,0 +1,32 @@
+# Os dados são versionados em Parquet (data_splits/*.parquet, ~92 MB).
+# Os CSVs originais (~500 MB) ficam fora; veja README.md.
+*.csv
+!paper/resultados/*.csv
+
+# Backups de versões antigas
+Codigo_VS_code/app_backup.py
+Codigo_VS_code/pages_backup
+Codigo_VS_code/pages_backup_final
+Codigo_VS_code/requirements_backup.txt
+Codigo_VS_code/status
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Saída gerada do manuscrito (regenerável com paper/gerar_docx.py)
+paper/saida/
+
+# Análises internas (não publicadas)
+interno/

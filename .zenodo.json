@@ -1,0 +1,11 @@
+{
+  "title": "chicago-crime-analytics: dashboard e avaliação de modelos preditivos para crimes em Chicago",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {"name": "Massuda, Matheus Henrique", "affiliation": "Instituto de Biociências de Botucatu, UNESP"},
+    {"name": "Rybarczyk Filho, José Luiz", "affiliation": "Instituto de Biociências de Botucatu, UNESP"}
+  ],
+  "keywords": ["crime prediction", "time series", "Prophet", "random forest", "DBSCAN", "Chicago", "Streamlit"],
+  "description": "Dashboard Streamlit e scripts de avaliação comparando Prophet e Random Forest na previsão diária de crimes em Chicago (2014-2024), com análise espacial por DBSCAN. Material suplementar do artigo."
+}

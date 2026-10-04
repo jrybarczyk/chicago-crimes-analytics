@@ -1,0 +1,6 @@
+modelo,MAE_rel,sMAPE,MAPE,vitorias_multi_passo
+Prophet,0.886,23.604,24.808,32
+RF recursivo,0.89,21.302,23.287,23
+RF 1 passo,0.647,15.807,17.706,0
+Média último ano,0.905,21.718,24.3,8
+Naive sazonal (t-364),1.0,24.554,27.017,0
