@@ -1,7 +1,6 @@
 # Os dados são versionados em Parquet (data_splits/*.parquet, ~92 MB).
 # Os CSVs originais (~500 MB) ficam fora; veja README.md.
 *.csv
-!paper/resultados/*.csv
 
 # Backups de versões antigas
 Codigo_VS_code/app_backup.py
@@ -25,8 +24,8 @@ Thumbs.db
 # Streamlit
 .streamlit/secrets.toml
 
-# Saída gerada do manuscrito (regenerável com paper/gerar_docx.py)
-paper/saida/
+# Manuscrito e análises do artigo (mantidos apenas localmente)
+/paper/
 
 # Análises internas (não publicadas)
 interno/
