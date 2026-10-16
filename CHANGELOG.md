@@ -1,5 +1,13 @@
 # Changelog
 
+## Não lançado — 2026-10-16
+
+- Aplicação e páginas organizadas na raiz, com dependências e configuração Streamlit centralizadas.
+- Dados movidos para `data/processed/` e documentação acadêmica para `docs/`.
+- Instruções de execução e deploy atualizadas; URL do repositório corrigida na citação.
+- Dev Container alinhado ao Python 3.12 e à nova estrutura.
+- Pasta `paper/` mantida apenas localmente, fora do versionamento.
+
 ## 1.0.0 — 2026-10-03
 
 Versão de publicação. Em relação ao código original do TCC (2025):

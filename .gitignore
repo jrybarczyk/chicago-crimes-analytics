@@ -1,13 +1,6 @@
-# Os dados são versionados em Parquet (data_splits/*.parquet, ~92 MB).
+# Os dados são versionados em Parquet (data/processed/*.parquet, ~92 MB).
 # Os CSVs originais (~500 MB) ficam fora; veja README.md.
 *.csv
-
-# Backups de versões antigas
-Codigo_VS_code/app_backup.py
-Codigo_VS_code/pages_backup
-Codigo_VS_code/pages_backup_final
-Codigo_VS_code/requirements_backup.txt
-Codigo_VS_code/status
 
 # Python
 __pycache__/
@@ -29,3 +22,14 @@ Thumbs.db
 
 # Análises internas (não publicadas)
 interno/
+
+# Configurações locais e credenciais
+.agents/
+.codex/
+.aws/
+.env
+.env.*
+!.env.example
+
+# Arquivos legados mantidos localmente
+/Codigo_VS_code/

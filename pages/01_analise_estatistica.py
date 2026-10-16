@@ -37,7 +37,7 @@ def main():
 
     df_full = load_all()
     if df_full.empty:
-        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data_splits'.")
+        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
         return
 
     # ---------------- Filtros ----------------

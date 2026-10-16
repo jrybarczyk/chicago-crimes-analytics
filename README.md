@@ -1,113 +1,84 @@
-# chicago-crime-analytics
+# Chicago Crimes Analytics
 
-Dashboard em Streamlit e material de pesquisa para análise estatística, exploratória,
-preditiva e espacial dos crimes registrados em Chicago (2014–2024). O projeto nasceu
-como trabalho de conclusão de curso de Matheus Henrique Massuda
-(`TCC_Matheus_Massuda.pdf`, orientação de José Luiz Rybarczyk Filho, IBB/UNESP) e foi
-ampliado para publicação: avaliação com origem deslizante em 63 cenários, baselines
-ingênuas e comparação estatística entre modelos.
+Dashboard em Streamlit para explorar os crimes registrados em Chicago entre 2014 e
+2024. Reúne análises estatísticas, séries temporais, previsão diária com Prophet e
+Random Forest e mapas com agrupamento espacial por DBSCAN.
 
-**Principais resultados** (detalhes em `paper/`):
+O projeto nasceu do trabalho de conclusão de curso de Matheus Henrique Massuda,
+com orientação de José Luiz Rybarczyk Filho (IBB/UNESP). O texto está em
+[docs/TCC_Matheus_Massuda.pdf](docs/TCC_Matheus_Massuda.pdf).
 
-- Prophet e Random Forest recursivo são equivalentes na média dos 63 cenários e
-  reduzem o erro do ingênuo sazonal em cerca de 11%.
-- Em anos estáveis o Prophet é melhor; em anos de ruptura (pandemia) ele extrapola
-  tendências e falha, e o Random Forest se equipara a uma baseline de nível recente.
-- O padrão semanal depende do tipo de crime, e a base contém um artefato de horário
-  padrão (12:00 e 00:00) que afeta análises sub-diárias.
+## Funcionalidades
+
+- **Análise estatística:** filtros, indicadores e exportação dos dados selecionados.
+- **Análise exploratória:** evolução temporal, sazonalidade e valores atípicos.
+- **Predição de crimes:** comparação entre Prophet e Random Forest recursivo.
+- **Análise espacial:** mapas interativos, distritos e identificação de hotspots.
 
 ## Estrutura
 
-```
-paper/
-├── manuscrito.md                 # texto do artigo (fonte)
-├── gerar_docx.py                 # gera o .docx no template da Rev. Bras. Crim.
-├── experimento_rolling.py        # avaliação com origem deslizante (63 cenários)
-├── analise_resultados.py         # tabelas e teste de Diebold-Mariano
-├── figuras.py                    # figuras do artigo (PNG 300 dpi + PDF)
-├── figuras/ · resultados/        # saídas versionadas
-└── template/                     # template oficial da revista
-Codigo_VS_code/
-├── app.py                        # página inicial
-├── data_loader.py                # carregamento centralizado dos CSVs (com cache)
-├── pages/
-│   ├── 01_analise_estatistica.py # filtros, métricas e exportação
-│   ├── 02_analise_exploratoria.py# série temporal, sazonalidade, outliers
-│   ├── 03_predicao_crimes.py     # Prophet × Random Forest (previsão diária)
-│   └── 04_analise_espacial.py    # mapas Folium, distritos, DBSCAN
-├── data_splits/                  # dados em Parquet (um arquivo por período)
-└── requirements.txt
+```text
+chicago-crimes-analytics/
+├── app.py                    # página inicial do Streamlit
+├── data_loader.py            # leitura, filtros de período e cache dos dados
+├── pages/                    # quatro páginas de análise
+├── data/
+│   ├── README.md             # fonte, formato e atualização dos dados
+│   └── processed/            # seis arquivos Parquet de 2014 a 2024
+├── docs/
+│   ├── README.md             # documentação do projeto
+│   ├── methodology.md        # metodologia de previsão
+│   ├── TCC_Matheus_Massuda.pdf
+│   └── references/tcc.txt    # referências originais do TCC
+├── .streamlit/config.toml    # configuração visual e do servidor
+├── .devcontainer/            # ambiente para VS Code / Codespaces
+├── .python-version           # Python 3.12
+├── requirements.txt          # dependências da aplicação
+├── CITATION.cff               # autores e citação
+├── CHANGELOG.md               # histórico de mudanças
+└── LICENSE                    # licença MIT do código
 ```
 
-## Como rodar
+## Executar localmente
+
+Com Python 3.12, execute na raiz do repositório:
 
 ```bash
-cd Codigo_VS_code
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+git clone https://github.com/jrybarczyk/chicago-crimes-analytics.git
+cd chicago-crimes-analytics
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
 ```
 
-## Dados
+No Windows, ative o ambiente com `.venv\Scripts\activate`.
+Abra o endereço exibido no terminal (por padrão, `http://localhost:8501`).
+Os dados Parquet já estão incluídos no repositório.
 
-Os dados estão em `Codigo_VS_code/data_splits/`, em formato Parquet (zstd), um
-arquivo por período, ~92 MB no total:
+## Dados e metodologia
 
-```
-chicago_crimes_2014_2015.parquet
-chicago_crimes_2016_2017.parquet
-chicago_crimes_2018_2019.parquet
-chicago_crimes_2020_2021.parquet
-chicago_crimes_2022_2023.parquet
-chicago_crimes_2024_2024.parquet
-```
+Os dados vêm do portal da cidade de Chicago e estão organizados por período em
+`data/processed/`. Consulte [data/README.md](data/README.md) para conhecer o formato
+esperado e converter novos CSVs.
 
-Fonte: portal de dados da cidade de Chicago, *Crimes - 2001 to Present*
-(https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-Present/ijzp-q8t2).
-
-Para atualizar ou regenerar, coloque CSVs com o nome
-`chicago_crimes_<ano_inicial>_<ano_final>.csv` na mesma pasta e rode:
-
-```bash
-cd Codigo_VS_code && python data_loader.py
-```
-
-O loader aceita CSV e Parquet; quando os dois existem para o mesmo período, usa o
-Parquet. Colunas esperadas: `ID, Date, IUCR, Primary Type, Description, Arrest,
-Domestic, Beat, District, Ward, Community Area, FBI Code, X Coordinate,
-Y Coordinate, Year, Latitude, Longitude, Month, Day, Hour, DayOfWeek`, com `Date`
-no formato `AAAA-MM-DD HH:MM:SS`.
+A comparação dos modelos usa treino anterior ao ano de teste e previsão recursiva
+sem acesso aos valores reais futuros. As métricas e os critérios estão em
+[docs/methodology.md](docs/methodology.md).
 
 ## Deploy no Streamlit Community Cloud
 
-1. Suba o repositório no GitHub.
-2. Em https://share.streamlit.io, clique em **Create app** e selecione o repositório.
-3. Em **Main file path** informe `Codigo_VS_code/app.py`.
-4. A versão do Python vem de `.python-version` (3.12) e as dependências de
-   `requirements.txt` na raiz. Nada mais precisa ser configurado.
+1. Selecione o repositório `jrybarczyk/chicago-crimes-analytics` e a branch `main`.
+2. Informe `app.py` como **Main file path**.
+3. Selecione Python 3.12 nas opções de ambiente.
 
-O primeiro carregamento lê os Parquets (cerca de 1 s) e mantém o dataset em cache;
-o uso de memória fica em torno de 250 MB, dentro do limite do plano gratuito.
+As dependências estão em `requirements.txt` e a configuração em `.streamlit/`.
+Em um deploy existente, atualize o caminho antigo `Codigo_VS_code/app.py` para
+`app.py`.
 
-## Metodologia de previsão
+## Autoria e licença
 
-Prophet e Random Forest recebem a mesma série diária (dias sem ocorrência contam
-como zero) e são avaliados no mesmo ano de teste, sempre o ano seguinte ao fim do
-treino. As features de lag e média móvel do Random Forest usam apenas valores
-anteriores ao dia previsto, e o modo recursivo gera a previsão do ano inteiro sem
-acesso aos valores reais do teste, tornando-a comparável à do Prophet.
-Métricas: MAE, RMSE, MAPE (dias com valor > 0) e sMAPE.
-
-## Reproduzir o artigo
-
-```bash
-source .venv/bin/activate
-python paper/experimento_rolling.py   # ~25 min; gera paper/resultados/
-python paper/analise_resultados.py    # tabelas consolidadas e teste DM
-python paper/figuras.py               # figuras em paper/figuras/
-python paper/gerar_docx.py            # paper/saida/*.docx (versões anônima e identificada)
-```
-
-## Como citar
-
-Veja `CITATION.cff`. Licença MIT (`LICENSE`). Histórico de mudanças em `CHANGELOG.md`.
+Veja [CITATION.cff](CITATION.cff) para citar o software e
+[CHANGELOG.md](CHANGELOG.md) para o histórico de alterações. O código usa a
+[licença MIT](LICENSE); a fonte e os termos dos dados estão em
+[data/README.md](data/README.md).

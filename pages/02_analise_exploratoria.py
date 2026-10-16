@@ -45,7 +45,7 @@ def main():
 
     df = load_all()
     if df.empty:
-        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data_splits'.")
+        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
         return
 
     # ---------------- Controles ----------------

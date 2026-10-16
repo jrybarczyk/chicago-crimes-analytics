@@ -1,7 +1,7 @@
 # data_loader.py - Carregamento centralizado dos dados de crimes de Chicago
 #
-# Este módulo NÃO desenha nada na tela. Ele apenas lê os CSVs da pasta
-# data_splits/ e devolve um DataFrame. Assim ele pode ser importado por
+# Este módulo NÃO desenha nada na tela. Ele lê os arquivos Parquet ou CSV da pasta
+# data/processed/ e devolve um DataFrame. Assim ele pode ser importado por
 # qualquer página sem efeitos colaterais (antes, importar app.py renderizava
 # a página inicial inteira dentro das subpáginas).
 import os
@@ -11,11 +11,11 @@ import glob
 import pandas as pd
 import streamlit as st
 
-# Pasta data_splits relativa a este arquivo, para funcionar independente do
+# Pasta data/processed relativa a este arquivo, para funcionar independente do
 # diretório de onde o `streamlit run` foi chamado.
 # Formatos aceitos: .parquet (preferido: ~5x menor e muito mais rápido) e .csv.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data_splits")
+DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
 
 ANO_MIN, ANO_MAX = 2014, 2024
 
@@ -51,7 +51,7 @@ COLUNAS_CATEGORICAS = ("Primary Type", "Description", "IUCR", "FBI Code")
 
 
 def listar_arquivos(years_range=None):
-    """Lista os CSVs cujo intervalo de anos intersecta `years_range`.
+    """Lista os arquivos cujo intervalo de anos intersecta `years_range`.
 
     years_range: tupla (ano_inicial, ano_final) ou None para todos.
     """
@@ -131,7 +131,7 @@ def _ler_csv(caminho):
 
 @st.cache_data(show_spinner="Carregando dados de crimes...")
 def load_data(years_range=None):
-    """Carrega os crimes de Chicago da pasta data_splits.
+    """Carrega os crimes de Chicago da pasta data/processed.
 
     years_range: tupla (ano_inicial, ano_final) ou None para todos os dados.
     Só os arquivos que cobrem o intervalo pedido são lidos do disco.

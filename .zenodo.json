@@ -7,5 +7,5 @@
     {"name": "Rybarczyk Filho, José Luiz", "affiliation": "Instituto de Biociências de Botucatu, UNESP"}
   ],
   "keywords": ["crime prediction", "time series", "Prophet", "random forest", "DBSCAN", "Chicago", "Streamlit"],
-  "description": "Dashboard Streamlit e scripts de avaliação comparando Prophet e Random Forest na previsão diária de crimes em Chicago (2014-2024), com análise espacial por DBSCAN. Material suplementar do artigo."
+  "description": "Dashboard Streamlit para análise estatística, exploratória, preditiva e espacial de crimes em Chicago (2014-2024), com comparação entre Prophet e Random Forest e análise espacial por DBSCAN."
 }

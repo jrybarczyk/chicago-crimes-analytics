@@ -5,7 +5,7 @@ title: "chicago-crime-analytics: dashboard e avaliação de modelos preditivos p
 version: 1.0.0
 date-released: 2026-10-03
 license: MIT
-repository-code: "https://github.com/<usuario>/chicago-crime-analytics"
+repository-code: "https://github.com/jrybarczyk/chicago-crimes-analytics"
 authors:
   - family-names: Massuda
     given-names: Matheus Henrique

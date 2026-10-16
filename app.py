@@ -71,7 +71,7 @@ st.markdown("---")
 st.markdown(f"### 📋 Informações dos Dados — {selected_period_label}")
 
 if df.empty:
-    st.error("❌ Nenhum dado encontrado. Verifique se os arquivos estão na pasta 'data_splits'.")
+    st.error("❌ Nenhum dado encontrado. Verifique se os arquivos estão na pasta 'data/processed'.")
 else:
     col_info1, col_info2, col_info3, col_info4 = st.columns(4)
 
