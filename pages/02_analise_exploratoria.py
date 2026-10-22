@@ -12,7 +12,7 @@ import streamlit as st
 st.set_page_config(page_title="Análise Exploratória - Crimes Chicago", page_icon="📈", layout="wide")
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data_loader import load_all  # noqa: E402
+from data_loader import load_data, ANO_MIN, ANO_MAX  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
@@ -43,25 +43,31 @@ def main():
     if st.button("← Voltar para Página Inicial"):
         st.switch_page("app.py")
 
-    df = load_all()
+    # ---------------- Controles ----------------
+    # Os anos vêm antes do carregamento: só os arquivos do período pedido saem
+    # do disco (ver data_loader.load_data).
+    st.sidebar.header("🎯 Controles de Análise")
+
+    available_years = list(range(ANO_MIN, ANO_MAX + 1))
+    selected_years = st.sidebar.multiselect("Anos:", options=available_years,
+                                            default=available_years[-3:])
+    if not selected_years:
+        st.warning("⚠️ Selecione pelo menos um ano.")
+        return
+
+    df = load_data((min(selected_years), max(selected_years)))
     if df.empty:
         st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
         return
-
-    # ---------------- Controles ----------------
-    st.sidebar.header("🎯 Controles de Análise")
 
     crime_types = sorted(df["Primary Type"].unique())
     padrao = [c for c in ("THEFT", "BATTERY", "ASSAULT") if c in crime_types] or crime_types[:3]
     selected_crimes = st.sidebar.multiselect("Tipos de Crime:", options=crime_types, default=padrao)
 
-    available_years = sorted(int(a) for a in df["Year"].unique())
-    selected_years = st.sidebar.multiselect("Anos:", options=available_years, default=available_years[-3:])
-
     analysis_granularity = st.sidebar.radio("Agregação Temporal:", ["Diária", "Mensal", "Anual"], index=1)
 
-    if not selected_crimes or not selected_years:
-        st.warning("⚠️ Selecione pelo menos um tipo de crime e um ano.")
+    if not selected_crimes:
+        st.warning("⚠️ Selecione pelo menos um tipo de crime.")
         return
 
     df_filtered = df[df["Primary Type"].isin(selected_crimes) & df["Year"].isin(selected_years)]
@@ -107,10 +113,21 @@ def main():
             st.metric("Total de Crimes", f"{int(temporal_data['y'].sum()):,}")
             st.metric(f"Média {analysis_granularity}", f"{temporal_data['y'].mean():.1f}")
             st.metric("Máximo", f"{int(temporal_data['y'].max()):,}")
-            if len(temporal_data) > 1:
-                primeiro, ultimo = temporal_data["y"].iloc[0], temporal_data["y"].iloc[-1]
-                if primeiro > 0:
-                    st.metric("Variação (1º → último período)", f"{(ultimo / primeiro - 1) * 100:+.1f}%")
+            # Comparar o primeiro e o último valor isolados é ruído puro na
+            # granularidade diária (dois dias quaisquer). Compara-se a média dos
+            # primeiros e dos últimos 10% dos períodos, com um mínimo de 1.
+            if len(temporal_data) > 3:
+                k = max(1, len(temporal_data) // 10)
+                inicio = temporal_data["y"].iloc[:k].mean()
+                fim = temporal_data["y"].iloc[-k:].mean()
+                if inicio > 0:
+                    st.metric(
+                        "Variação (início → fim do período)",
+                        f"{(fim / inicio - 1) * 100:+.1f}%",
+                        help=f"Média dos {k} primeiros períodos ({inicio:.1f}) contra a dos "
+                             f"{k} últimos ({fim:.1f}). Não é uma estimativa de tendência: "
+                             "para isso use a média móvel no gráfico ao lado.",
+                    )
 
     # ---------------- Estatísticas ----------------
     with tab2:
@@ -183,19 +200,32 @@ def main():
             )
             st.plotly_chart(fig_heat, width="stretch")
 
-        # Outliers (regra do IQR, nos dois lados)
+        # Outliers (regra do IQR, nos dois lados), com limites calculados POR ANO.
+        # Limites sobre a janela inteira confundem mudança de nível com anomalia:
+        # com 2020 na seleção, a queda pandêmica inteira era marcada como
+        # "dias atípicos" quando na verdade é outro patamar, não outlier.
         st.subheader("🚨 Análise de Valores Atípicos (dias)")
-        q1, q3 = daily["y"].quantile([0.25, 0.75])
-        iqr = q3 - q1
-        lim_sup, lim_inf = q3 + 1.5 * iqr, q1 - 1.5 * iqr
-        outliers_sup = daily[daily["y"] > lim_sup]
-        outliers_inf = daily[daily["y"] < lim_inf]
+        daily["ano"] = daily["ds"].dt.year
+        limites = daily.groupby("ano")["y"].quantile([0.25, 0.75]).unstack()
+        limites.columns = ["q1", "q3"]
+        limites["iqr"] = limites["q3"] - limites["q1"]
+        limites["lim_sup"] = limites["q3"] + 1.5 * limites["iqr"]
+        limites["lim_inf"] = limites["q1"] - 1.5 * limites["iqr"]
+        daily = daily.join(limites[["lim_sup", "lim_inf"]], on="ano")
+        outliers_sup = daily[daily["y"] > daily["lim_sup"]]
+        outliers_inf = daily[daily["y"] < daily["lim_inf"]]
 
         col3, col4 = st.columns(2)
         with col3:
             st.metric("Dias atípicos (acima)", len(outliers_sup))
             st.metric("Dias atípicos (abaixo)", len(outliers_inf))
-            st.caption(f"Limites IQR: {max(lim_inf, 0):.1f} a {lim_sup:.1f} crimes/dia")
+            st.caption("Limites IQR calculados **por ano**, para não confundir mudança de "
+                       "patamar entre anos (pandemia, por exemplo) com dias anômalos.")
+            st.dataframe(
+                limites[["lim_inf", "lim_sup"]].clip(lower=0).round(1)
+                       .rename(columns={"lim_inf": "Limite inferior", "lim_sup": "Limite superior"}),
+                width="stretch",
+            )
         with col4:
             if not outliers_sup.empty:
                 st.markdown("**Top 5 dias com mais crimes:**")
@@ -211,7 +241,7 @@ def main():
     col1, col2, col3 = st.columns(3)
     col1.info("**📅 Sazonalidade**\n- Padrão semanal bem definido\n- Considerar feriados\n- Sazonalidade anual (verão > inverno)")
     col2.info("**⚙️ Configurações Prophet**\n- seasonality_mode='multiplicative'\n- weekly_seasonality=True\n- yearly_seasonality=True")
-    col3.info("**📊 Validação**\n- Holdout temporal (treino → teste)\n- Métricas: MAE, RMSE, MAPE\n- Comparar previsão multi-passo entre modelos")
+    col3.info("**📊 Validação**\n- Holdout temporal (treino → teste)\n- Métricas: MAE, RMSE, ME (viés)\n- Comparar só o mesmo horizonte\n- Sempre contra naive sazonal e climatologia")
 
     st.markdown("---")
     st.markdown("**Módulo de Análise Exploratória - Chicago Crime Analytics**")
