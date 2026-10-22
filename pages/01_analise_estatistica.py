@@ -12,7 +12,7 @@ st.set_page_config(page_title="Análise Estatística - Crimes Chicago", page_ico
 
 # Permite importar data_loader.py da pasta raiz do projeto
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data_loader import load_all  # noqa: E402
+from data_loader import load_data, ANO_MIN, ANO_MAX  # noqa: E402
 
 DIAS_SEMANA = {
     "Monday": "Segunda", "Tuesday": "Terça", "Wednesday": "Quarta", "Thursday": "Quinta",
@@ -35,19 +35,25 @@ def main():
     if st.button("← Voltar para Página Inicial"):
         st.switch_page("app.py")
 
-    df_full = load_all()
-    if df_full.empty:
-        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
-        return
-
     # ---------------- Filtros ----------------
+    # Os anos são escolhidos ANTES do carregamento: só os arquivos do período
+    # pedido saem do disco. Carregar os 11 anos de uma vez consome ~558 MB de
+    # RSS e não cabe no piso de memória do Streamlit Community Cloud (690 MB).
     st.sidebar.header("🔧 Filtros para Análise")
 
-    anos_disponiveis = sorted(int(a) for a in df_full["Year"].unique())
+    anos_disponiveis = list(range(ANO_MIN, ANO_MAX + 1))
     anos_padrao = [a for a in (2022, 2023, 2024) if a in anos_disponiveis] or anos_disponiveis[-1:]
     anos_selecionados = st.sidebar.multiselect(
         "Selecione os anos para análise:", options=anos_disponiveis, default=anos_padrao
     )
+    if not anos_selecionados:
+        st.warning("⚠️ Selecione pelo menos um ano na barra lateral.")
+        return
+
+    df_full = load_data((min(anos_selecionados), max(anos_selecionados)))
+    if df_full.empty:
+        st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
+        return
 
     crime_types_full = sorted(df_full["Primary Type"].unique())
     selected_crime = st.sidebar.multiselect(
@@ -64,9 +70,6 @@ def main():
         )
 
     # ---------------- Aplicação dos filtros ----------------
-    if not anos_selecionados:
-        st.warning("⚠️ Selecione pelo menos um ano na barra lateral.")
-        return
     if not selected_crime:
         st.warning("⚠️ Selecione pelo menos um tipo de crime na barra lateral.")
         return
@@ -100,10 +103,32 @@ def main():
     col1, col2, col3, col4 = st.columns(4)
 
     total_crimes = len(df_filtrado)
-    dias_unicos = df_filtrado["Date"].dt.normalize().nunique()
+    dias_com_ocorrencia = df_filtrado["Date"].dt.normalize().nunique()
+    # A média diária divide pelos dias do CALENDÁRIO selecionado, não pelos dias
+    # com ocorrência. Dividir pelos dias com ocorrência superestima a média em
+    # crimes raros (medido em 2022-2024: +24,7% em homicídio, +40,7% em incêndio
+    # criminoso, +3.109% em tráfico de pessoas) e é incoerente com a convenção de
+    # preencher dias vazios com zero usada nas páginas 02 e 03.
+    # Conta os dias de calendário realmente cobertos pelos dados em cada ano
+    # selecionado — assim um ano parcial (o ano corrente, por exemplo) não infla
+    # o denominador, e anos não contíguos são somados corretamente.
+    cob_min = df_full["Date"].min().normalize()
+    cob_max = df_full["Date"].max().normalize()
+    dias_calendario = 0
+    for a in anos_selecionados:
+        ini = max(pd.Timestamp(year=a, month=1, day=1), cob_min)
+        fim = min(pd.Timestamp(year=a, month=12, day=31), cob_max)
+        if fim >= ini:
+            dias_calendario += (fim - ini).days + 1
+    if (hora_i, hora_f) != (0, 23):
+        st.caption("ℹ️ Com filtro de horário ativo, a média diária considera apenas as "
+                   "ocorrências da faixa escolhida, sobre todos os dias do período.")
 
     col1.metric("Total de crimes", f"{total_crimes:,}")
-    col2.metric("Média de crimes por dia", f"{total_crimes / dias_unicos:.1f}" if dias_unicos else "N/D")
+    col2.metric("Média de crimes por dia",
+                f"{total_crimes / dias_calendario:.1f}" if dias_calendario else "N/D",
+                help=f"{total_crimes:,} ocorrências ÷ {dias_calendario:,} dias do calendário. "
+                     f"Houve ocorrência em {dias_com_ocorrencia:,} desses dias.")
     if "Arrest" in df_filtrado.columns:
         col3.metric("Taxa de Prisões", f"{df_filtrado['Arrest'].mean() * 100:.1f}%")
     else:
@@ -136,6 +161,17 @@ def main():
         hora_pico = int(crimes_por_hora.idxmax())
         fig_hora.add_annotation(x=hora_pico, y=crimes_por_hora.max(), text=f"Pico: {hora_pico}h", showarrow=True)
         st.plotly_chart(fig_hora, width="stretch")
+        # 12h e 0h são as duas horas modais da base (5,86% e 5,66% dos registros,
+        # acima das 18h com 5,56%), e os carimbos exatos 12:00 e 00:00 são os dois
+        # mais frequentes entre os 1.440 possíveis: é horário desconhecido
+        # registrado por convenção, não comportamento urbano (crime aorístico).
+        st.caption(
+            "⚠️ **Leia com cuidado:** as barras de 00h e 12h estão infladas por registros "
+            "cujo horário é desconhecido e foi codificado como meia-noite ou meio-dia. "
+            "Na base inteira, 12:00 e 00:00 são os dois carimbos mais frequentes "
+            "(2,49% e 2,11% de todos os registros). Não interprete esses dois horários "
+            "como picos de atividade."
+        )
 
     # ---------------- Análise detalhada ----------------
     st.header("🔍 Análise Detalhada dos Dados")
@@ -163,7 +199,7 @@ def main():
 
             st.write("**Informações Gerais:**")
             st.write(f"• Total de tipos distintos: **{len(contagem_tipos)}**")
-            st.write(f"• Dias com ocorrências: **{dias_unicos:,}**")
+            st.write(f"• Dias com ocorrências: **{dias_com_ocorrencia:,}** de {dias_calendario:,} do período")
             if "Domestic" in df_filtrado.columns:
                 st.write(f"• Crimes domésticos: **{df_filtrado['Domestic'].mean() * 100:.1f}%**")
 

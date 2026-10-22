@@ -21,9 +21,13 @@ st.markdown("---")
 # as páginas de análise possuem seus próprios filtros de ano)
 st.sidebar.header("📅 Resumo por Período")
 
+# A primeira opção é a que carrega por padrão. Começar pelo período recente, e
+# não pelos 11 anos, mantém a página inicial leve: carregar 2014-2024 custa
+# ~558 MB de RSS contra ~352 MB de um triênio, e o piso de memória garantido
+# pelo Streamlit Community Cloud é de 690 MB.
 period_options = {
-    f"Dados Completos ({ANO_MIN}-{ANO_MAX})": (ANO_MIN, ANO_MAX),
     "Período Recente (2022-2024)": (2022, 2024),
+    f"Dados Completos ({ANO_MIN}-{ANO_MAX})": (ANO_MIN, ANO_MAX),
     "2020-2021": (2020, 2021),
     "2018-2019": (2018, 2019),
     "2016-2017": (2016, 2017),

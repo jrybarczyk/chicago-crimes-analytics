@@ -2,6 +2,9 @@
 # Os CSVs originais (~500 MB) ficam fora; veja README.md.
 *.csv
 
+# Saídas dos experimentos (regeráveis)
+resultados/
+
 # Python
 __pycache__/
 *.pyc

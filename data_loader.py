@@ -2,8 +2,15 @@
 #
 # Este módulo NÃO desenha nada na tela. Ele lê os arquivos Parquet ou CSV da pasta
 # data/processed/ e devolve um DataFrame. Assim ele pode ser importado por
-# qualquer página sem efeitos colaterais (antes, importar app.py renderizava
-# a página inicial inteira dentro das subpáginas).
+# qualquer página sem efeitos colaterais.
+#
+# Memória (medido com a pilha da aplicação importada, em processos limpos):
+#   2014-2024, 21 colunas ................ 967 MB de RSS
+#   2014-2024, só as colunas usadas ...... 558 MB
+#   período selecionado, colunas usadas .. 352 MB
+# O piso de memória garantido pelo Streamlit Community Cloud é de 690 MB, então
+# carregar tudo não cabe. Por isso o padrão aqui é ler apenas os arquivos do
+# período pedido e apenas as colunas que a aplicação de fato usa.
 import os
 import re
 import glob
@@ -12,10 +19,12 @@ import pandas as pd
 import streamlit as st
 
 # Pasta data/processed relativa a este arquivo, para funcionar independente do
-# diretório de onde o `streamlit run` foi chamado.
+# diretório de onde o `streamlit run` foi chamado. Pode ser sobrescrita pela
+# variável de ambiente CHICAGO_DATA_DIR (útil em testes e em deploys que montam
+# os dados em outro caminho).
 # Formatos aceitos: .parquet (preferido: ~5x menor e muito mais rápido) e .csv.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
+DATA_DIR = os.environ.get("CHICAGO_DATA_DIR") or os.path.join(BASE_DIR, "data", "processed")
 
 ANO_MIN, ANO_MAX = 2014, 2024
 
@@ -42,6 +51,16 @@ DTYPES = {
     "Hour": "int8",
     "DayOfWeek": "int8",
 }
+
+# Colunas efetivamente referenciadas por app.py e pelas quatro páginas.
+# As demais (ID, IUCR, Description, Beat, Ward, Community Area, FBI Code,
+# X Coordinate, Y Coordinate, Day, DayOfWeek) somam 118 MB dos 215 MB do
+# DataFrame completo e não são lidas por nenhum gráfico ou métrica. Para exibir
+# a linha bruta inteira, chame load_data(..., colunas="todas").
+COLUNAS_APP = [
+    "Date", "Primary Type", "Arrest", "Domestic", "District",
+    "Year", "Latitude", "Longitude", "Month", "Hour",
+]
 
 # A coluna Location é redundante (é só "(lat, lon)" em texto) e pesa muito.
 COLUNAS_IGNORADAS = {"Location"}
@@ -78,33 +97,39 @@ def listar_arquivos(years_range=None):
     return selecionados
 
 
-def _ler_parquet(caminho):
+def _resolver_colunas(colunas):
+    """None/'app' -> COLUNAS_APP; 'todas' -> None (lê tudo); lista -> a lista."""
+    if colunas in (None, "app"):
+        return list(COLUNAS_APP)
+    if colunas == "todas":
+        return None
+    return list(colunas)
+
+
+def _ler_parquet(caminho, colunas=None):
     """Lê um Parquet gerado por `converter_para_parquet` (tipos já otimizados)."""
-    parte = pd.read_parquet(caminho)
+    if colunas is not None:
+        # Só as colunas pedidas saem do disco: o pyarrow não materializa as
+        # demais. A interseção com o schema tolera arquivos antigos aos quais
+        # falte alguma coluna derivada.
+        import pyarrow.parquet as pq
+        disponiveis = set(pq.ParquetFile(caminho).schema_arrow.names)
+        colunas = [c for c in colunas if c in disponiveis]
+    parte = pd.read_parquet(caminho, columns=colunas)
     for col in COLUNAS_CATEGORICAS:
         if col in parte.columns:
             parte[col] = parte[col].astype("category")
     return parte
 
 
-def _ler_arquivo(caminho):
-    if caminho.endswith(".parquet"):
-        return _ler_parquet(caminho)
-    return _ler_csv(caminho)
-
-
-def converter_para_parquet(pasta=DATA_DIR):
-    """Converte todos os CSVs da pasta em .parquet (zstd). Uso: python data_loader.py"""
-    for csv in sorted(glob.glob(os.path.join(pasta, "chicago_crimes_*.csv"))):
-        destino = csv[:-4] + ".parquet"
-        _ler_csv(csv).to_parquet(destino, compression="zstd", index=False)
-        print(f"{os.path.basename(destino)}: {os.path.getsize(destino) / 1e6:.1f} MB")
-
-
-def _ler_csv(caminho):
+def _ler_csv(caminho, colunas=None):
     """Lê um CSV com tipos otimizados e converte a coluna de data."""
     cabecalho = pd.read_csv(caminho, nrows=0).columns
     usecols = [c for c in cabecalho if c not in COLUNAS_IGNORADAS]
+    if colunas is not None:
+        # A coluna de data é indispensável mesmo quando não foi pedida.
+        necessarias = set(colunas) | {"Date", "Data"}
+        usecols = [c for c in usecols if c in necessarias]
     dtypes = {c: t for c, t in DTYPES.items() if c in usecols}
 
     parte = pd.read_csv(caminho, usecols=usecols, dtype=dtypes)
@@ -129,14 +154,22 @@ def _ler_csv(caminho):
     return parte
 
 
-@st.cache_data(show_spinner="Carregando dados de crimes...")
-def load_data(years_range=None):
-    """Carrega os crimes de Chicago da pasta data/processed.
+def _ler_arquivo(caminho, colunas=None):
+    if caminho.endswith(".parquet"):
+        return _ler_parquet(caminho, colunas)
+    return _ler_csv(caminho, colunas)
 
-    years_range: tupla (ano_inicial, ano_final) ou None para todos os dados.
-    Só os arquivos que cobrem o intervalo pedido são lidos do disco.
-    Retorna um DataFrame vazio se nada puder ser carregado.
-    """
+
+def converter_para_parquet(pasta=DATA_DIR):
+    """Converte todos os CSVs da pasta em .parquet (zstd). Uso: python data_loader.py"""
+    for csv in sorted(glob.glob(os.path.join(pasta, "chicago_crimes_*.csv"))):
+        destino = csv[:-4] + ".parquet"
+        _ler_csv(csv).to_parquet(destino, compression="zstd", index=False)
+        print(f"{os.path.basename(destino)}: {os.path.getsize(destino) / 1e6:.1f} MB")
+
+
+def _carregar(years_range, colunas):
+    """Leitura efetiva, sem cache. Separada para poder ser testada."""
     if not os.path.isdir(DATA_DIR):
         return pd.DataFrame()
 
@@ -144,10 +177,18 @@ def load_data(years_range=None):
     if not arquivos:
         return pd.DataFrame()
 
+    cols = _resolver_colunas(colunas)
     partes = []
     for arq in arquivos:
         try:
-            partes.append(_ler_arquivo(arq))
+            parte = _ler_arquivo(arq, cols)
+            # Filtrar cada parte ANTES do concat reduz o pico de memória: sem
+            # isso as partes e o resultado concatenado coexistem em tamanho cheio.
+            if years_range is not None and "Year" in parte.columns:
+                inicio, fim = years_range
+                parte = parte[(parte["Year"] >= inicio) & (parte["Year"] <= fim)]
+            parte = parte.dropna(subset=["Date"])
+            partes.append(parte)
         except Exception as e:  # arquivo corrompido não derruba os demais
             st.warning(f"⚠️ Arquivo ignorado ({os.path.basename(arq)}): {e}")
 
@@ -155,6 +196,7 @@ def load_data(years_range=None):
         return pd.DataFrame()
 
     df = pd.concat(partes, ignore_index=True)
+    partes.clear()  # libera as partes antes de qualquer outra alocação
 
     # Após o concat as categorias de cada parte são unidas; reconverter garante
     # que as colunas continuem categóricas (e leves).
@@ -162,18 +204,39 @@ def load_data(years_range=None):
         if col in df.columns:
             df[col] = df[col].astype("category")
 
-    df = df.dropna(subset=["Date"])
-
-    if years_range is not None:
-        inicio, fim = years_range
-        df = df[(df["Year"] >= inicio) & (df["Year"] <= fim)]
-
     return df.reset_index(drop=True)
 
 
-def load_all():
-    """Atalho para o dataset completo (2014-2024)."""
-    return load_data((ANO_MIN, ANO_MAX))
+# cache_resource e não cache_data: cache_data guarda uma cópia serializada e
+# devolve uma cópia nova a cada chamada, duplicando o maior objeto da aplicação.
+# O DataFrame devolvido aqui é tratado como SOMENTE LEITURA pelas páginas —
+# filtros criam views ou cópias derivadas, nunca alteram este objeto.
+@st.cache_resource(show_spinner="Carregando dados de crimes...")
+def load_data(years_range=None, colunas="app"):
+    """Carrega os crimes de Chicago da pasta data/processed.
+
+    years_range: tupla (ano_inicial, ano_final) ou None para todos os dados.
+        Só os arquivos que cobrem o intervalo pedido são lidos do disco.
+    colunas: "app" (padrão, só as colunas usadas pela aplicação), "todas",
+        ou uma lista explícita de nomes.
+    Retorna um DataFrame vazio se nada puder ser carregado.
+
+    ATENÇÃO: o objeto devolvido é compartilhado entre as páginas. Não modifique
+    o DataFrame no lugar; use .copy() antes de qualquer atribuição.
+    """
+    if isinstance(colunas, list):
+        colunas = tuple(colunas)  # cache_resource exige argumentos hasheáveis
+    return _carregar(years_range, list(colunas) if isinstance(colunas, tuple) else colunas)
+
+
+def load_all(colunas="app"):
+    """Atalho para o dataset completo (2014-2024).
+
+    Evite em páginas interativas: carregar os 11 anos de uma vez consome ~558 MB
+    de RSS mesmo só com as colunas da aplicação. Prefira
+    load_data((ano_inicial, ano_final)) com o período que o usuário selecionou.
+    """
+    return load_data((ANO_MIN, ANO_MAX), colunas)
 
 
 if __name__ == "__main__":

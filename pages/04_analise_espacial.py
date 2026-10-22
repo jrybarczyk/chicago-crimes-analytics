@@ -16,7 +16,7 @@ from sklearn.cluster import DBSCAN
 st.set_page_config(page_title="Análise Espacial - Crimes Chicago", page_icon="🗺️", layout="wide")
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from data_loader import load_all  # noqa: E402
+from data_loader import load_data, ANO_MIN, ANO_MAX  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
@@ -49,21 +49,27 @@ def main():
     if st.button("← Voltar para Página Inicial"):
         st.switch_page("app.py")
 
-    df = load_all()
+    # ---------------- Filtros ----------------
+    # Os anos vêm antes do carregamento: a página espacial é a mais pesada do
+    # painel (mapa + DBSCAN), então ler só o período pedido importa ainda mais aqui.
+    st.sidebar.header("🎯 Controles de Análise")
+    st.sidebar.subheader("🔍 Filtros de Dados")
+
+    available_years = list(range(ANO_MIN, ANO_MAX + 1))
+    selected_years = st.sidebar.multiselect("Anos:", options=available_years,
+                                            default=available_years[-1:])
+    if not selected_years:
+        st.warning("⚠️ Selecione pelo menos um ano.")
+        return
+
+    df = load_data((min(selected_years), max(selected_years)))
     if df.empty:
         st.error("❌ Não foi possível carregar os dados. Verifique se os arquivos estão na pasta 'data/processed'.")
         return
 
-    # ---------------- Filtros ----------------
-    st.sidebar.header("🎯 Controles de Análise")
-    st.sidebar.subheader("🔍 Filtros de Dados")
-
     crime_types = sorted(df["Primary Type"].unique())
     padrao = [c for c in ("THEFT", "BATTERY", "ASSAULT") if c in crime_types] or crime_types[:3]
     selected_crimes = st.sidebar.multiselect("Tipos de Crime:", options=crime_types, default=padrao)
-
-    available_years = sorted(int(a) for a in df["Year"].unique())
-    selected_years = st.sidebar.multiselect("Anos:", options=available_years, default=available_years[-1:])
 
     start_month, end_month = st.sidebar.slider("Meses (Jan=1, Dez=12):", 1, 12, (1, 12))
 
@@ -73,7 +79,9 @@ def main():
     )
     max_pontos = st.sidebar.select_slider(
         "Máximo de pontos no mapa:", options=[2_000, 5_000, 10_000, 20_000, 50_000], value=10_000,
-        help="Amostra aleatória para manter o navegador responsivo.",
+        help="Amostra aleatória para manter o navegador responsivo. Acima de 20 mil "
+             "pontos o HTML do mapa passa de dezenas de MB e pesa tanto no container "
+             "quanto no navegador — prefira o mapa de calor para ver o padrão geral.",
     )
 
     # Parâmetros do DBSCAN sempre definidos: a aba de clusters também os usa
@@ -85,8 +93,8 @@ def main():
         "Pontos usados no DBSCAN:", options=[10_000, 25_000, 50_000, 100_000], value=50_000
     )
 
-    if not selected_crimes or not selected_years:
-        st.warning("⚠️ Selecione pelo menos um tipo de crime e um ano.")
+    if not selected_crimes:
+        st.warning("⚠️ Selecione pelo menos um tipo de crime.")
         return
 
     mask = (
@@ -142,11 +150,18 @@ def main():
 
         else:  # Pontos individuais
             # FastMarkerCluster desenha dezenas de milhares de pontos sem travar
+            # zip sobre as colunas, e não iterrows(): iterrows constrói uma Series
+            # por linha e é o gargalo quando são dezenas de milhares de pontos.
             popups = [
-                f"<b>Tipo:</b> {r['Primary Type']}<br><b>Data:</b> {r['Date']:%d/%m/%Y %H:%M}"
-                f"<br><b>Distrito:</b> {int(r['District']) if pd.notna(r['District']) else 'N/A'}"
-                f"<br><b>Prisão:</b> {'Sim' if r['Arrest'] else 'Não'}"
-                for _, r in display_df[["Primary Type", "Date", "District", "Arrest"]].iterrows()
+                f"<b>Tipo:</b> {tipo}<br><b>Data:</b> {data:%d/%m/%Y %H:%M}"
+                f"<br><b>Distrito:</b> {int(dist) if pd.notna(dist) else 'N/A'}"
+                f"<br><b>Prisão:</b> {'Sim' if prisao else 'Não'}"
+                for tipo, data, dist, prisao in zip(
+                    display_df["Primary Type"].astype(str),
+                    display_df["Date"],
+                    display_df["District"],
+                    display_df["Arrest"],
+                )
             ]
             callback = """
             function (row) {

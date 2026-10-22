@@ -1,0 +1,3 @@
+# Dependências de desenvolvimento (não necessárias para o deploy).
+-r requirements.txt
+pytest>=8.0
